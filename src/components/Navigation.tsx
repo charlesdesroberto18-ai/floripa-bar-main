@@ -39,26 +39,26 @@ export default function Navigation({ activeTab, setActiveTab, items, activeUser 
   const navItems = [
     {
       id: 'dashboard' as TabId,
-      label: 'Rotina Garçom',
+      label: 'Rotina',
       icon: PieChart,
       badge: 0,
     },
     ...(activeUser?.role === 'admin' ? [{
       id: 'admin' as TabId,
-      label: 'Painel Admin',
+      label: 'Admin',
       icon: ShieldCheck,
       badge: 0,
     }] : []),
     {
       id: 'estoque' as TabId,
-      label: 'Estoque Suprimentos',
+      label: 'Estoque',
       icon: Boxes,
       badge: outOfStockCount,
       badgeColor: 'bg-rose-500 text-white',
     },
     {
       id: 'validades' as TabId,
-      label: 'Controle Validades',
+      label: 'Validades',
       icon: Calendar,
       badge: expiringCount,
       badgeColor: 'bg-amber-600 text-white',
@@ -71,13 +71,13 @@ export default function Navigation({ activeTab, setActiveTab, items, activeUser 
     },
     {
       id: 'relatorios' as TabId,
-      label: 'Relatórios & WhatsApp',
+      label: 'WhatsApp',
       icon: FileText,
       badge: 0,
     },
     {
       id: 'configuracoes' as TabId,
-      label: 'Configurações',
+      label: 'Ajustes',
       icon: Settings,
       badge: 0,
     },

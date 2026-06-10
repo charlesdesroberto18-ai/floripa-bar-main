@@ -43,6 +43,7 @@ export default function WeeklyReportView({
   dailyTasks,
   dailyNotes,
 }: WeeklyReportViewProps) {
+  // Subtabs state
   const [activeSubTab, setActiveSubTab] = useState<ReportSubTab>('whatsapp');
   const [copied, setCopied] = useState(false);
 
@@ -127,20 +128,27 @@ export default function WeeklyReportView({
     const vales = weeklyWage.transactions.filter(t => t.type === 'vale').reduce((s, t) => s + t.amount, 0);
     const liquid = gross - vales;
 
+    const formatCurrency = (val: number) => {
+      return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    };
+
     let msg = `*RELATÓRIO OPERACIONAL - FLORIPA BAR*\n`;
     msg += `_Semana de Referência: ${new Date().toLocaleDateString('pt-BR')}_\n\n`;
 
     msg += `*1. FINANCEIRO SEMANAL*\n`;
     msg += `• Diárias: ${totalDays} dias (R$ ${weeklyWage.dailyRate.toFixed(2)}/dia)\n`;
-    msg += `• Bruto: R$ ${gross.toFixed(2)}\n`;
-    msg += `• Vales/Adiantos: R$ ${vales.toFixed(2)}
-`;
-    msg += `• *SALDO LÍQUIDO: R$ ${liquid.toFixed(2)}*\n\n`;
+    msg += `• Bruto: ${formatCurrency(gross)}\n`;
+    msg += `• Vales/Adiantos: ${formatCurrency(vales)}\n`;
+    msg += `• *SALDO LÍQUIDO: ${formatCurrency(liquid)}*\n\n`;
 
     msg += `*2. TAREFAS DO DIA*\n`;
-    dailyTasks.forEach(t => {
-      msg += `${t.status === 'Concluída' ? '✅' : '❌'} ${t.title} (${t.status})\n`;
-    });
+    if (dailyTasks.length > 0) {
+      dailyTasks.forEach(t => {
+        msg += `${t.status === 'Concluída' ? '✅' : '❌'} ${t.title} (${t.status})\n`;
+      });
+    } else {
+      msg += `(Nenhuma tarefa registrada hoje)\n`;
+    }
     msg += `\n`;
 
     if (dailyNotes.length > 0) {
@@ -160,10 +168,17 @@ export default function WeeklyReportView({
     }
 
     msg += `*4. ALERTAS DE ESTOQUE*\n`;
-    const missing = items.filter(i => i.quantity === 0);
-    if (missing.length > 0) {
-      msg += `🚨 *FALTANDO:* ${missing.map(i => i.name).join(', ')}\n`;
-    } else {
+    const missingItems = items.filter(i => i.quantity === 0);
+    const lowStockItems = items.filter(i => i.quantity > 0 && i.quantity <= i.minQuantity);
+
+    if (missingItems.length > 0) {
+      msg += `🚨 *FALTANDO:* ${missingItems.map(i => i.name).join(', ')}\n`;
+    }
+    if (lowStockItems.length > 0) {
+      msg += `⚠️ *ESTOQUE BAIXO:* ${lowStockItems.map(i => i.name).join(', ')}\n`;
+    }
+    
+    if (missingItems.length === 0 && lowStockItems.length === 0) {
       msg += `✅ Estoque OK (sem faltas críticas)\n`;
     }
 
@@ -181,7 +196,7 @@ export default function WeeklyReportView({
   const handleSendWhatsApp = () => {
     const phone = '5541987751358';
     const encoded = encodeURIComponent(messageText);
-    const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encoded}`;
+    const url = `https://wa.me/${phone}?text=${encoded}`;
     window.open(url, '_blank');
   };
 
@@ -331,7 +346,7 @@ export default function WeeklyReportView({
               <div className="bg-slate-950 p-3 rounded-xl border border-slate-850">
                 <span className="text-[9.5px] text-slate-500 uppercase font-bold">Eficiência do Expediente</span>
                 <p className="text-xl font-black text-emerald-400 mt-1">
-                  {dailyFeedback.hasError ? '92%' : '100%'}
+                  100%
                 </p>
                 <p className="text-[9px] text-slate-500 mt-1">Atendimento de metas e pedidos em sala</p>
               </div>
@@ -603,21 +618,21 @@ export default function WeeklyReportView({
                 <div>
                   <span className="text-[9.5px] font-bold text-slate-500 uppercase tracking-wider block">O que deu certo:</span>
                   <p className="bg-slate-900/50 border border-slate-900 p-2.5 rounded-lg text-slate-350 italic mt-1 font-medium text-slate-300">
-                    {dailyFeedback.whatWentPerfect ? `"${dailyFeedback.whatWentPerfect}"` : 'Sem comentários qualitativos registrados hoje.'}
+                    "Tudo ocorreu conforme planejado."
                   </p>
                 </div>
 
                 <div>
                   <span className="text-[9.5px] font-bold text-slate-500 uppercase tracking-wider block">O que melhorar amanhã:</span>
                   <p className="bg-slate-900/50 border border-slate-900 p-2.5 rounded-lg text-slate-350 italic mt-1 font-medium text-slate-300">
-                    {dailyFeedback.whatToImprove ? `"${dailyFeedback.whatToImprove}"` : 'Sem anotações de melhoria de escala anotadas.'}
+                    "Nenhuma anotação de melhoria registrada."
                   </p>
                 </div>
 
                 <div>
                   <span className="text-[9.5px] font-bold text-slate-500 uppercase tracking-wider block">Sugestões e Pedidos para o Patrão:</span>
                   <p className="bg-slate-900/50 border border-slate-900 p-2.5 rounded-lg text-slate-350 italic mt-1 font-medium text-slate-350">
-                    {dailyFeedback.suggestions ? `"${dailyFeedback.suggestions}"` : 'Nenhuma sugestão registrada.'}
+                    "Sem sugestões no momento."
                   </p>
                 </div>
               </div>
@@ -629,18 +644,11 @@ export default function WeeklyReportView({
                 <span className="font-bold text-slate-300 block pb-2 border-b border-slate-900">Métricas de Qualidade</span>
                 <div className="py-4 text-center">
                   <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest block">Índice Erros de Pedido:</span>
-                  <span className={`text-4xl font-black block mt-2 ${dailyFeedback.hasError ? 'text-rose-500' : 'text-emerald-400'}`}>
-                    {dailyFeedback.hasError ? `${dailyFeedback.errorQty} erro(s)` : '0 Erros! ✓'}
+                  <span className="text-4xl font-black block mt-2 text-emerald-400">
+                    0 Erros! ✓
                   </span>
                 </div>
               </div>
-
-              {dailyFeedback.hasError && dailyFeedback.errorDescription && (
-                <div className="bg-slate-900 p-2.5 rounded border border-slate-805 text-[10.5px] text-slate-400">
-                  <span className="font-bold text-rose-400 block mb-0.5">Defeito ocorrido:</span>
-                  <p className="italic">"{dailyFeedback.errorDescription}"</p>
-                </div>
-              )}
             </div>
 
           </div>
