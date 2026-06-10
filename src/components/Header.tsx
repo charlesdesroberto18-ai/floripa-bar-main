@@ -1,10 +1,5 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React from 'react';
-import { RefreshCw, AlertTriangle, Clock, LogOut, Shield, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { RefreshCw, AlertTriangle, Clock, LogOut, Shield, AlertCircle, Calendar } from 'lucide-react';
 import { Item } from '../types';
 import { UserSession } from './LoginScreen';
 import FloripaLogo from './FloripaLogo';
@@ -18,6 +13,15 @@ interface HeaderProps {
 }
 
 export default function Header({ items, onResetData, lastUpdatedStr, activeUser, onLogout }: HeaderProps) {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const lowStockCount = items.filter(
     (item) => item.quantity > 0 && item.quantity <= item.minQuantity
   ).length;
@@ -35,10 +39,19 @@ export default function Header({ items, onResetData, lastUpdatedStr, activeUser,
 
           <div className="hidden lg:block h-8 w-[1px] bg-white/10 mx-2" />
 
-          <div className="hidden sm:flex items-center gap-3">
-            <span className="px-3 py-1 bg-brand-orange/10 text-brand-orange text-[10px] font-black uppercase tracking-[0.2em] rounded-full border border-brand-orange/20 shadow-[0_0_15px_rgba(249,115,22,0.1)]">
-              Estoque Ativo
-            </span>
+          <div className="flex flex-col text-left leading-tight">
+            <div className="flex items-center gap-2 text-brand-orange">
+              <Clock className="w-3 h-3" />
+              <span className="text-xs font-black font-mono tracking-wider">
+                {currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-500 mt-1">
+              <Calendar className="w-3 h-3" />
+              <span className="text-[10px] font-bold uppercase tracking-widest">
+                {currentTime.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -74,7 +87,7 @@ export default function Header({ items, onResetData, lastUpdatedStr, activeUser,
               <div className="flex flex-col text-left leading-tight pr-2">
                 <span className="text-xs font-black text-white leading-none tracking-tight">{activeUser.name}</span>
                 <span className="text-[9px] text-slate-500 uppercase tracking-widest font-black mt-1">
-                  {activeUser.role === 'gerente' ? 'Gerente' : activeUser.role === 'cozinha' ? 'Chef Cozinha' : 'Bartender'}
+                  {activeUser.role === 'admin' ? 'Administrador' : activeUser.role === 'gerente' ? 'Gerente' : activeUser.role === 'cozinha' ? 'Chef Cozinha' : 'Bartender'}
                 </span>
               </div>
               <button
@@ -103,4 +116,3 @@ export default function Header({ items, onResetData, lastUpdatedStr, activeUser,
     </header>
   );
 }
-

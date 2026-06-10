@@ -291,13 +291,13 @@ export default function DashboardView({
               <div className="space-y-1">
                 <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Entrada</p>
                 <p className="text-lg font-black text-slate-200 font-mono">
-                  {workShift.startTime ? new Date(workShift.startTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                  {workShift.startTime ? workShift.startTime : '--:--'}
                 </p>
               </div>
               <div className="border-x border-white/5 space-y-1">
                 <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Saída</p>
                 <p className="text-lg font-black text-slate-200 font-mono">
-                  {workShift.endTime ? new Date(workShift.endTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                  {workShift.endTime ? workShift.endTime : '--:--'}
                 </p>
               </div>
               <div className="space-y-1">
