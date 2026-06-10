@@ -1,4 +1,4 @@
-export type TabId = 'dashboard' | 'estoque' | 'validades' | 'movimentacoes' | 'relatorios' | 'configuracoes';
+export type TabId = 'dashboard' | 'estoque' | 'validades' | 'movimentacoes' | 'relatorios' | 'configuracoes' | 'add-item' | 'admin';
 
 export type Category =
   | 'Bebidas'

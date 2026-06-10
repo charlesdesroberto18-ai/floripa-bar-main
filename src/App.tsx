@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Item, Movement, TabId, WorkShift, WeeklyWage, DailyTask, DailyNote, DailyFeedback, TaskStatus, WageTransaction } from './types';
 import { INITIAL_ITEMS, INITIAL_MOVEMENTS } from './initialData';
+import { supabase } from './lib/supabase';
 
 // Modular Components
 import Header from './components/Header';
@@ -12,6 +13,7 @@ import MovementsView from './components/MovementsView';
 import ValidadesView from './components/ValidadesView';
 import WeeklyReportView from './components/WeeklyReportView';
 import ConfiguracoesView from './components/ConfiguracoesView';
+import AdminPanelView from './components/AdminPanelView';
 import LoginScreen, { UserSession } from './components/LoginScreen';
 
 export default function App() {
@@ -42,25 +44,8 @@ export default function App() {
     transactions: [],
   });
 
-  const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([
-    { id: 't1', title: 'Lustrar todos os copos de chopp do bar principal', priority: 'Média', dueTime: '17:00', status: 'Concluída' },
-    { id: 't2', title: 'Verificar temperatura exata das chopeiras (< -2ºC)', priority: 'Alta', dueTime: '16:00', status: 'Concluída' },
-    { id: 't3', title: 'Completar geladeiras expositoras de cerveja do salão', priority: 'Alta', dueTime: '18:00', status: 'Pendente' },
-    { id: 't4', title: 'Retirar lixo acumulado e limpar balcão de serviço', priority: 'Média', dueTime: '19:30', status: 'Pendente' },
-    { id: 't5', title: 'Confirmação do lote de validades da cozinha', priority: 'Alta', dueTime: '17:30', status: 'Pendente' },
-  ]);
-
+  const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([]);
   const [dailyNotes, setDailyNotes] = useState<DailyNote[]>([]);
-
-  const [dailyFeedback, setDailyFeedback] = useState<DailyFeedback>({
-    hasError: false,
-    errorQty: 0,
-    errorDescription: '',
-    whatWentPerfect: '',
-    whatToImprove: '',
-    suggestions: '',
-    uploads: [],
-  });
 
   // Editing state overlay
   const [itemToEdit, setItemToEdit] = useState<Item | null>(null);
@@ -68,12 +53,82 @@ export default function App() {
   // shift background timer ref
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize and load from LocalStorage
+  // 1. Handle Supabase Auth State
   useEffect(() => {
-    const storedItems = localStorage.getItem('floripa_items');
-    const storedMovements = localStorage.getItem('floripa_movements');
-    const storedSync = localStorage.getItem('floripa_last_sync');
-    const storedUser = localStorage.getItem('floripa_active_user');
+    // Check active session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setActiveUser({
+          name: session.user.user_metadata?.full_name || 'Administrador',
+          role: 'admin',
+          avatarColor: 'bg-indigo-600 border-indigo-500/40',
+          title: 'Administrador do Sistema',
+          email: session.user.email,
+        });
+      }
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setActiveUser({
+          name: session.user.user_metadata?.full_name || 'Administrador',
+          role: 'admin',
+          avatarColor: 'bg-indigo-600 border-indigo-500/40',
+          title: 'Administrador do Sistema',
+          email: session.user.email,
+        });
+      } else {
+        // If it was a PIN user, we don't clear it here, unless we want to force logout
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // 2. Load Core Data (Supabase or LocalStorage)
+  useEffect(() => {
+    const loadData = async () => {
+      if (activeUser?.role === 'admin') {
+        // Fetch from Supabase
+        try {
+          const { data: itemsData } = await supabase.from('items').select('*').order('name');
+          const { data: movementsData } = await supabase.from('movements').select('*').order('date', { ascending: false });
+          
+          if (itemsData) setItems(itemsData);
+          if (movementsData) setMovements(movementsData);
+          setLastSyncStr(new Date().toLocaleTimeString('pt-BR'));
+        } catch (error) {
+          console.error('Erro ao carregar dados do Supabase:', error);
+        }
+      } else {
+        // Fetch from LocalStorage
+        const storedItems = localStorage.getItem('floripa_items');
+        const storedMovements = localStorage.getItem('floripa_movements');
+        const storedSync = localStorage.getItem('floripa_last_sync');
+        const storedUser = localStorage.getItem('floripa_active_user');
+
+        if (storedUser && !activeUser) {
+          try { setActiveUser(JSON.parse(storedUser)); } catch (e) {}
+        }
+
+        if (storedItems && storedMovements) {
+          setItems(JSON.parse(storedItems));
+          setMovements(JSON.parse(storedMovements));
+          setLastSyncStr(storedSync || new Date().toLocaleTimeString('pt-BR'));
+        } else {
+          setItems(INITIAL_ITEMS);
+          setMovements(INITIAL_MOVEMENTS);
+          const initialTimeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          setLastSyncStr(initialTimeStr);
+          localStorage.setItem('floripa_items', JSON.stringify(INITIAL_ITEMS));
+          localStorage.setItem('floripa_movements', JSON.stringify(INITIAL_MOVEMENTS));
+          localStorage.setItem('floripa_last_sync', initialTimeStr);
+        }
+      }
+    };
+
+    loadData();
 
     // Operational state restoration
     const storedShift = localStorage.getItem('floripa_work_shift');
@@ -81,41 +136,11 @@ export default function App() {
     const storedTasks = localStorage.getItem('floripa_daily_tasks');
     const storedNotes = localStorage.getItem('floripa_daily_notes');
 
-    if (storedUser) {
-      try {
-        setActiveUser(JSON.parse(storedUser));
-      } catch (e) {}
-    }
-
-    if (storedItems && storedMovements) {
-      setItems(JSON.parse(storedItems));
-      setMovements(JSON.parse(storedMovements));
-      setLastSyncStr(storedSync || new Date().toLocaleTimeString('pt-BR'));
-    } else {
-      // Load initial hardcoded mock data
-      setItems(INITIAL_ITEMS);
-      setMovements(INITIAL_MOVEMENTS);
-      const initialTimeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      setLastSyncStr(initialTimeStr);
-      
-      localStorage.setItem('floripa_items', JSON.stringify(INITIAL_ITEMS));
-      localStorage.setItem('floripa_movements', JSON.stringify(INITIAL_MOVEMENTS));
-      localStorage.setItem('floripa_last_sync', initialTimeStr);
-    }
-
-    if (storedShift) {
-      try { setWorkShift(JSON.parse(storedShift)); } catch (e) {}
-    }
-    if (storedWage) {
-      try { setWeeklyWage(JSON.parse(storedWage)); } catch (e) {}
-    }
-    if (storedTasks) {
-      try { setDailyTasks(JSON.parse(storedTasks)); } catch (e) {}
-    }
-    if (storedNotes) {
-      try { setDailyNotes(JSON.parse(storedNotes)); } catch (e) {}
-    }
-  }, []);
+    if (storedShift) { try { setWorkShift(JSON.parse(storedShift)); } catch (e) {} }
+    if (storedWage) { try { setWeeklyWage(JSON.parse(storedWage)); } catch (e) {} }
+    if (storedTasks) { try { setDailyTasks(JSON.parse(storedTasks)); } catch (e) {} }
+    if (storedNotes) { try { setDailyNotes(JSON.parse(storedNotes)); } catch (e) {} }
+  }, [activeUser?.role]);
 
   // Chronometer count handler for work shift
   useEffect(() => {
@@ -127,51 +152,57 @@ export default function App() {
             elapsedSeconds: prev.elapsedSeconds + 1,
             totalWorkedMinutes: Math.floor((prev.elapsedSeconds + 1) / 60),
           };
-          localStorage.setItem('mare_work_shift', JSON.stringify(next));
+          localStorage.setItem('floripa_work_shift', JSON.stringify(next));
           return next;
         });
       }, 1000);
-    } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+    } else if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [workShift.status]);
 
-  // Sync to localStorage Helper for Core Items + Movements
-  const syncData = (updatedItems: Item[], updatedMovements: Movement[]) => {
+  // Sync to localStorage / Supabase Helper
+  const syncData = async (updatedItems: Item[], updatedMovements: Movement[]) => {
     const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     setItems(updatedItems);
     setMovements(updatedMovements);
     setLastSyncStr(timeStr);
 
-    localStorage.setItem('mare_items', JSON.stringify(updatedItems));
-    localStorage.setItem('mare_movements', JSON.stringify(updatedMovements));
-    localStorage.setItem('mare_last_sync', timeStr);
+    if (activeUser?.role === 'admin') {
+      // In a real app, we'd do individual CRUD operations, 
+      // but for this prototype integration we'll just handle local state.
+      // CRUD functions will handle Supabase directly.
+    } else {
+      localStorage.setItem('floripa_items', JSON.stringify(updatedItems));
+      localStorage.setItem('floripa_movements', JSON.stringify(updatedMovements));
+      localStorage.setItem('floripa_last_sync', timeStr);
+    }
   };
 
   const handleLogin = (session: UserSession) => {
     setActiveUser(session);
-    localStorage.setItem('mare_active_user', JSON.stringify(session));
+    if (session.role !== 'admin') {
+      localStorage.setItem('floripa_active_user', JSON.stringify(session));
+    }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (activeUser?.role === 'admin') {
+      await supabase.auth.signOut();
+    }
     setActiveUser(null);
-    localStorage.removeItem('mare_active_user');
+    localStorage.removeItem('floripa_active_user');
   };
 
   const handleUpdateUserDetails = (name: string, title: string) => {
     if (activeUser) {
       const nextUser = { ...activeUser, name, title };
       setActiveUser(nextUser);
-      localStorage.setItem('mare_active_user', JSON.stringify(nextUser));
+      if (activeUser.role !== 'admin') {
+        localStorage.setItem('floripa_active_user', JSON.stringify(nextUser));
+      }
     }
   };
 
@@ -179,7 +210,6 @@ export default function App() {
   const handleResetData = () => {
     syncData(INITIAL_ITEMS, INITIAL_MOVEMENTS);
     
-    // reset operations
     const initialShift: WorkShift = { status: 'nao_iniciada', startTime: null, endTime: null, totalWorkedMinutes: 0, elapsedSeconds: 0 };
     const initialWage: WeeklyWage = {
       dailyRate: 150,
@@ -187,40 +217,16 @@ export default function App() {
       selectedDays: ['Quarta-feira', 'Quinta-feira'],
       transactions: [],
     };
-    const initialTasks: DailyTask[] = [
-      { id: 't1', title: 'Lustrar todos os copos de chopp do bar principal', priority: 'Média', dueTime: '17:00', status: 'Concluída' },
-      { id: 't2', title: 'Verificar temperatura exata das chopeiras (< -2ºC)', priority: 'Alta', dueTime: '16:00', status: 'Concluída' },
-      { id: 't3', title: 'Completar geladeiras expositoras de cerveja do salão', priority: 'Alta', dueTime: '18:00', status: 'Pendente' },
-      { id: 't4', title: 'Retirar lixo acumulado e limpar balcão de serviço', priority: 'Média', dueTime: '19:30', status: 'Pendente' },
-    ];
 
     setWorkShift(initialShift);
     setWeeklyWage(initialWage);
-    setDailyTasks(initialTasks);
+    setDailyTasks([]);
     setDailyNotes([]);
-    setDailyFeedback({
-      hasError: false,
-      errorQty: 0,
-      errorDescription: '',
-      whatWentPerfect: '',
-      whatToImprove: '',
-      suggestions: '',
-      uploads: [],
-    });
 
-    localStorage.setItem('mare_work_shift', JSON.stringify(initialShift));
-    localStorage.setItem('mare_weekly_wage', JSON.stringify(initialWage));
-    localStorage.setItem('mare_daily_tasks', JSON.stringify(initialTasks));
-    localStorage.setItem('mare_daily_notes', JSON.stringify([]));
-    localStorage.setItem('mare_daily_feedback', JSON.stringify({
-      hasError: false,
-      errorQty: 0,
-      errorDescription: '',
-      whatWentPerfect: '',
-      whatToImprove: '',
-      suggestions: '',
-      uploads: [],
-    }));
+    localStorage.setItem('floripa_work_shift', JSON.stringify(initialShift));
+    localStorage.setItem('floripa_weekly_wage', JSON.stringify(initialWage));
+    localStorage.setItem('floripa_daily_tasks', JSON.stringify([]));
+    localStorage.setItem('floripa_daily_notes', JSON.stringify([]));
 
     setActiveTab('dashboard');
   };
@@ -229,207 +235,90 @@ export default function App() {
     syncData(items, []);
   };
 
-  // Save Item (Create or Update Product attributes)
-  const handleSaveItem = (itemData: Omit<Item, 'id' | 'lastUpdated'> & { id?: string }) => {
+  // CRUD Operations
+  const handleSaveItem = async (itemData: Omit<Item, 'id' | 'lastUpdated'> & { id?: string }) => {
     const nowIso = new Date().toISOString();
-    let updatedItems: Item[];
-
-    if (itemData.id) {
-      // Edit mode
-      updatedItems = items.map((i) =>
-        i.id === itemData.id
-          ? {
-              ...i,
-              name: itemData.name,
-              category: itemData.category,
-              quantity: itemData.quantity,
-              minQuantity: itemData.minQuantity,
-              unit: itemData.unit,
-              supplier: itemData.supplier,
-              notes: itemData.notes,
-              lastUpdated: nowIso,
-              unitValue: itemData.unitValue || 5.0,
-              barcode: itemData.barcode || '',
-              expiryDate: itemData.expiryDate || '',
-              photo: itemData.photo || i.photo,
-              storageLocation: itemData.storageLocation || 'Depósito',
-            }
-          : i
-      );
-      
-      // Register custom movement if quantity changed
-      const oldItem = items.find((i) => i.id === itemData.id);
-      if (oldItem && oldItem.quantity !== itemData.quantity) {
-        const diff = itemData.quantity - oldItem.quantity;
-        const newMove: Movement = {
-          id: 'm-' + Math.random().toString(36).substr(2, 9),
-          itemId: itemData.id,
-          itemName: itemData.name,
-          type: diff > 0 ? 'entrada' : 'saída',
-          quantity: Math.abs(diff),
-          date: nowIso,
-          notes: `Ajuste manual de estoque de ${oldItem.quantity} para ${itemData.quantity}`,
-          responsible: activeUser?.name || 'Sistema',
-        };
-        const updatedMovements = [newMove, ...movements];
-        syncData(updatedItems, updatedMovements);
+    
+    if (activeUser?.role === 'admin') {
+      if (itemData.id) {
+        const { error } = await supabase.from('items').update({ ...itemData, lastUpdated: nowIso }).eq('id', itemData.id);
+        if (error) console.error(error);
       } else {
-        syncData(updatedItems, movements);
+        const { error } = await supabase.from('items').insert([{ ...itemData, lastUpdated: nowIso }]);
+        if (error) console.error(error);
       }
-      setItemToEdit(null); // Close modal
+      // Reload from Supabase
+      const { data } = await supabase.from('items').select('*').order('name');
+      if (data) setItems(data);
+      setItemToEdit(null);
     } else {
-      // Create mode
-      const newId = 'item-' + Math.random().toString(36).substr(2, 9);
-      const newItem: Item = {
-        id: newId,
-        name: itemData.name,
-        category: itemData.category,
-        quantity: itemData.quantity,
-        minQuantity: itemData.minQuantity,
-        unit: itemData.unit,
-        supplier: itemData.supplier,
-        notes: itemData.notes,
-        lastUpdated: nowIso,
-        unitValue: itemData.unitValue || 5.0,
-        barcode: itemData.barcode || '',
-        expiryDate: itemData.expiryDate || '',
-        photo: itemData.photo,
-        storageLocation: itemData.storageLocation || 'Depósito',
-      };
-      updatedItems = [newItem, ...items];
-
-      // Add a historic initial entry movement log to keep stats true
-      const initialMove: Movement = {
-        id: 'm-' + Math.random().toString(36).substr(2, 9),
-        itemId: newId,
-        itemName: itemData.name,
-        type: 'entrada',
-        quantity: itemData.quantity,
-        date: nowIso,
-        notes: 'Cadastro inicial de suprimento',
-        responsible: activeUser?.name || 'Sistema',
-      };
-      
-      const updatedMovements = [initialMove, ...movements];
-      syncData(updatedItems, updatedMovements);
-      setActiveTab('estoque'); // Redirect to inventory table
+      // Local storage implementation (existing)
+      let updatedItems: Item[];
+      if (itemData.id) {
+        updatedItems = items.map((i) => i.id === itemData.id ? { ...i, ...itemData, lastUpdated: nowIso } : i);
+        syncData(updatedItems, movements);
+        setItemToEdit(null);
+      } else {
+        const newItem: Item = { ...itemData, id: 'item-' + Math.random().toString(36).substr(2, 9), lastUpdated: nowIso } as Item;
+        updatedItems = [newItem, ...items];
+        syncData(updatedItems, movements);
+        setActiveTab('estoque');
+      }
     }
   };
 
-  // Direct edit for other states like quantities
-  const handleUpdateProductQuantity = (id: string, newQty: number) => {
-    const updated = items.map((i) => {
-      if (i.id === id) {
-        return { ...i, quantity: newQty, lastUpdated: new Date().toISOString() };
-      }
-      return i;
-    });
-    syncData(updated, movements);
-  };
-
-  // Delete product logic
-  const handleDeleteItem = (itemId: string) => {
-    const updatedItems = items.filter((i) => i.id !== itemId);
-    const updatedMovements = movements.filter((m) => m.itemId !== itemId);
-    syncData(updatedItems, updatedMovements);
-  };
-
-  // Add a raw manual Movement entry via the movements form
-  const handleAddNewMovement = (movementData: Omit<Movement, 'id' | 'date'> & { date?: string }) => {
-    const newId = 'm-' + Math.random().toString(36).substr(2, 9);
-    const nowIso = movementData.date || new Date().toISOString();
-    const cleanQty = movementData.quantityChange ? Math.abs(movementData.quantityChange) : (movementData.quantity || 1);
-
-    const newMovement: Movement = {
-      id: newId,
-      itemId: movementData.itemId,
-      itemName: movementData.productName || movementData.itemName || 'Produto Secundário',
-      productName: movementData.productName,
-      type: movementData.type,
-      subtype: movementData.subtype,
-      quantity: cleanQty,
-      quantityChange: movementData.quantityChange,
-      date: nowIso,
-      notes: movementData.notes,
-      responsible: movementData.responsible,
-      photo: movementData.photo,
-    };
-
-    const updatedMovements = [newMovement, ...movements];
-
-    // Readjust inventory calculation
-    const updatedItems = items.map((item) => {
-      if (item.id === movementData.itemId) {
-        let newQty = item.quantity;
-        if (movementData.quantityChange !== undefined) {
-          newQty = Math.max(0, item.quantity + movementData.quantityChange);
-        } else if (movementData.type === 'entrada' || movementData.type === 'Entrada') {
-          newQty += cleanQty;
-        } else if (movementData.type === 'saída' || movementData.type === 'Saída/Perda') {
-          newQty = Math.max(0, item.quantity - cleanQty);
-        } else if (movementData.type === 'ajuste') {
-          newQty = cleanQty; // Direct override
-        }
-        return {
-          ...item,
-          quantity: newQty,
-          lastUpdated: new Date().toISOString(),
-        };
-      }
-      return item;
-    });
-
-    syncData(updatedItems, updatedMovements);
-  };
-
-  // Fast direct quantity increment/decrement (+/-) from Dashboard warnings list or Stock list
-  const handleQuickQuantityAdjustment = (itemId: string, change: number, notesStr: string) => {
-    let typeOfOp: 'entrada' | 'saída' = change > 0 ? 'entrada' : 'saída';
-    const volumeAmt = Math.abs(change);
+  const handleUpdateProductQuantity = async (id: string, newQty: number) => {
     const nowIso = new Date().toISOString();
+    if (activeUser?.role === 'admin') {
+      await supabase.from('items').update({ quantity: newQty, lastUpdated: nowIso }).eq('id', id);
+      const { data } = await supabase.from('items').select('*').order('name');
+      if (data) setItems(data);
+    } else {
+      const updated = items.map((i) => i.id === id ? { ...i, quantity: newQty, lastUpdated: nowIso } : i);
+      syncData(updated, movements);
+    }
+  };
 
+  const handleDeleteItem = async (itemId: string) => {
+    if (activeUser?.role === 'admin') {
+      await supabase.from('items').delete().eq('id', itemId);
+      const { data } = await supabase.from('items').select('*').order('name');
+      if (data) setItems(data);
+    } else {
+      const updatedItems = items.filter((i) => i.id !== itemId);
+      const updatedMovements = movements.filter((m) => m.itemId !== itemId);
+      syncData(updatedItems, updatedMovements);
+    }
+  };
+
+  const handleAddNewMovement = async (movementData: Omit<Movement, 'id' | 'date'> & { date?: string }) => {
+    const nowIso = movementData.date || new Date().toISOString();
+    if (activeUser?.role === 'admin') {
+      const { error } = await supabase.from('movements').insert([{ ...movementData, date: nowIso }]);
+      if (error) console.error(error);
+      const { data } = await supabase.from('movements').select('*').order('date', { ascending: false });
+      if (data) setMovements(data);
+    } else {
+      const newMove: Movement = { ...movementData, id: 'm-' + Math.random().toString(36).substr(2, 9), date: nowIso };
+      syncData(items, [newMove, ...movements]);
+    }
+  };
+
+  const handleQuickQuantityAdjustment = async (itemId: string, change: number, notesStr: string) => {
     const targetItem = items.find((i) => i.id === itemId);
     if (!targetItem) return;
-
-    let actualChange = change;
-    if (change < 0 && targetItem.quantity < volumeAmt) {
-      actualChange = -targetItem.quantity;
-    }
-
-    if (actualChange === 0) return;
-
-    // Create a corresponding movement log to keep consistency
-    const newMove: Movement = {
-      id: 'm-' + Math.random().toString(36).substr(2, 9),
+    const newQty = Math.max(0, targetItem.quantity + change);
+    await handleUpdateProductQuantity(itemId, newQty);
+    await handleAddNewMovement({
       itemId,
       itemName: targetItem.name,
-      productName: targetItem.name,
-      type: typeOfOp === 'entrada' ? 'Entrada' : 'Saída/Perda',
-      subtype: 'Ajuste de Inventário',
-      quantity: Math.abs(actualChange),
-      quantityChange: actualChange,
-      date: nowIso,
-      notes: notesStr || (actualChange > 0 ? 'Ajuste rápido de entrada' : 'Ajuste rápido de saída'),
+      type: change > 0 ? 'Entrada' : 'Saída/Perda',
+      quantity: Math.abs(change),
+      notes: notesStr,
       responsible: activeUser?.name || 'Sistema',
-    };
-
-    const updatedMovements = [newMove, ...movements];
-
-    const updatedItems = items.map((item) => {
-      if (item.id === itemId) {
-        return {
-          ...item,
-          quantity: Math.max(0, item.quantity + actualChange),
-          lastUpdated: nowIso,
-        };
-      }
-      return item;
     });
-
-    syncData(updatedItems, updatedMovements);
   };
 
-  // Turn Actions
   const handleStartShift = () => {
     const nextShift: WorkShift = {
       status: 'em_andamento',
@@ -452,28 +341,19 @@ export default function App() {
     localStorage.setItem('floripa_work_shift', JSON.stringify(nextShift));
   };
 
-  // Wage Transaction updates
   const handleAddTransaction = (type: 'vale' | 'desconto', amount: number, description: string) => {
     const nextTrans: WageTransaction = {
       id: 'tx-' + Math.random().toString(36).substr(2, 9),
-      type,
-      amount,
-      description,
+      type, amount, description,
       date: new Date().toLocaleDateString('pt-BR'),
     };
-    const nextWage = {
-      ...weeklyWage,
-      transactions: [...weeklyWage.transactions, nextTrans],
-    };
+    const nextWage = { ...weeklyWage, transactions: [...weeklyWage.transactions, nextTrans] };
     setWeeklyWage(nextWage);
     localStorage.setItem('floripa_weekly_wage', JSON.stringify(nextWage));
   };
 
   const handleRemoveTransaction = (id: string) => {
-    const nextWage = {
-      ...weeklyWage,
-      transactions: weeklyWage.transactions.filter((t) => t.id !== id),
-    };
+    const nextWage = { ...weeklyWage, transactions: weeklyWage.transactions.filter((t) => t.id !== id) };
     setWeeklyWage(nextWage);
     localStorage.setItem('floripa_weekly_wage', JSON.stringify(nextWage));
   };
@@ -490,13 +370,8 @@ export default function App() {
     localStorage.setItem('floripa_weekly_wage', JSON.stringify(nextWage));
   };
 
-  // Daily Tasks
   const handleAddTask = (task: Omit<DailyTask, 'id' | 'status'>) => {
-    const nextT: DailyTask = {
-      ...task,
-      id: 'task-' + Math.random().toString(36).substr(2, 9),
-      status: 'Pendente',
-    };
+    const nextT: DailyTask = { ...task, id: 'task-' + Math.random().toString(36).substr(2, 9), status: 'Pendente' };
     const nextList = [nextT, ...dailyTasks];
     setDailyTasks(nextList);
     localStorage.setItem('floripa_daily_tasks', JSON.stringify(nextList));
@@ -514,13 +389,10 @@ export default function App() {
     localStorage.setItem('floripa_daily_tasks', JSON.stringify(nextList));
   };
 
-  // Daily Notes
   const handleAddNote = (text: string, link?: string, image?: string) => {
     const nextN: DailyNote = {
       id: 'note-' + Math.random().toString(36).substr(2, 9),
-      text,
-      link,
-      image,
+      text, link, image,
       date: new Date().toLocaleDateString('pt-BR'),
       time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     };
@@ -541,17 +413,6 @@ export default function App() {
     localStorage.setItem('floripa_daily_notes', JSON.stringify(nextList));
   };
 
-  // Feedback State Save
-  const handleSaveFeedback = (feedback: DailyFeedback) => {
-    setDailyFeedback(feedback);
-    localStorage.setItem('floripa_daily_feedback', JSON.stringify(feedback));
-  };
-
-  // Nav redirection utility helper
-  const handleRedirectAndNavigate = (tabId: TabId) => {
-    setActiveTab(tabId);
-  };
-
   if (!activeUser) {
     return <LoginScreen onLogin={handleLogin} />;
   }
@@ -570,7 +431,7 @@ export default function App() {
         <div className="flex flex-1 relative">
           <Navigation activeTab={activeTab} setActiveTab={setActiveTab} items={items} />
 
-          <main className="flex-1 p-4 md:p-10 bg-[radial-gradient(circle_at_top_right,rgba(122,22,22,0.03),transparent_40%)]">
+          <main className="flex-1 p-3 md:p-10 bg-[radial-gradient(circle_at_top_right,rgba(122,22,22,0.03),transparent_40%)]">
             <div className="max-w-7xl mx-auto animate-fade-in">
               {activeTab === 'dashboard' && (
                 <DashboardView
@@ -595,6 +456,13 @@ export default function App() {
                   onEditNote={handleEditNote}
                   onNavigate={setActiveTab}
                   onQuickQuantityUpdate={handleQuickQuantityAdjustment}
+                />
+              )}
+
+              {activeTab === 'admin' && activeUser?.role === 'admin' && (
+                <AdminPanelView
+                  items={items}
+                  movements={movements}
                 />
               )}
 
@@ -662,7 +530,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Overlay modal for product edit changes */}
       {itemToEdit && (
         <ItemFormModal
           isOpenAsModal={true}
@@ -672,9 +539,7 @@ export default function App() {
         />
       )}
 
-      {/* Mobile structural padding offset context */}
       <div className="h-16 lg:hidden" />
-
     </div>
   );
 }

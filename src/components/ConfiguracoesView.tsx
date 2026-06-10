@@ -48,6 +48,11 @@ export default function ConfiguracoesView({
   const [alertsZeroStock, setAlertsZeroStock] = useState(true);
   const [alertsSound, setAlertsSound] = useState(false);
 
+  // Password change states
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordChangeSuccess, setPasswordChangeSuccess] = useState(false);
+
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
 
@@ -64,6 +69,15 @@ export default function ConfiguracoesView({
     const parsedRate = parseFloat(dailyRate);
     if (!isNaN(parsedRate) && parsedRate > 0) {
       onUpdateDailyRate(parsedRate);
+    }
+
+    // Handle password change (local only for this demo)
+    if (newPassword && newPassword === confirmPassword) {
+      localStorage.setItem('floripa_local_password', newPassword);
+      setPasswordChangeSuccess(true);
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPasswordChangeSuccess(false), 3000);
     }
 
     setSaveSuccess(true);
@@ -133,6 +147,46 @@ export default function ConfiguracoesView({
               </select>
             </div>
           </div>
+        </div>
+
+        {/* Section: Password Security */}
+        <div className="bg-slate-900 rounded-2xl p-5 border border-slate-805 space-y-4 shadow-xl">
+          <h3 className="text-sm font-extrabold text-white flex items-center gap-2 border-b border-slate-850 pb-2">
+            <Lock className="w-4 h-4 text-brand-orange" />
+            <span>Segurança e Senha de Acesso</span>
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Nova Senha</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Mudar senha do terminal"
+                className="w-full bg-slate-950 text-white text-xs px-4 py-3 rounded-xl border border-slate-850 focus:border-brand-orange focus:outline-none"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Confirmar Senha</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Repita a nova senha"
+                className="w-full bg-slate-950 text-white text-xs px-4 py-3 rounded-xl border border-slate-850 focus:border-brand-orange focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {passwordChangeSuccess && (
+            <p className="text-[10px] text-emerald-500 font-bold animate-fade-in">✓ Senha local alterada com sucesso!</p>
+          )}
+          
+          <p className="text-[10px] text-slate-500 block">
+            Dica: A senha padrão inicial é <strong className="text-slate-400">0000</strong>. Ao alterar aqui, a nova senha será exigida no próximo login do usuário <strong className="text-slate-400">0000</strong>.
+          </p>
         </div>
 
         {/* Section 2: Establishment info */}

@@ -7,16 +7,19 @@ import {
   Calendar,
   Settings,
   Sparkles,
+  ShieldCheck,
 } from 'lucide-react';
 import { Item, TabId } from '../types';
+import { UserSession } from './LoginScreen';
 
 interface NavigationProps {
   activeTab: TabId;
   setActiveTab: (tab: TabId) => void;
   items: Item[];
+  activeUser: UserSession | null;
 }
 
-export default function Navigation({ activeTab, setActiveTab, items }: NavigationProps) {
+export default function Navigation({ activeTab, setActiveTab, items, activeUser }: NavigationProps) {
   // Compute some counts to show little notifications
   const outOfStockCount = items.filter((item) => item.quantity === 0).length;
   
@@ -40,6 +43,12 @@ export default function Navigation({ activeTab, setActiveTab, items }: Navigatio
       icon: PieChart,
       badge: 0,
     },
+    ...(activeUser?.role === 'admin' ? [{
+      id: 'admin' as TabId,
+      label: 'Painel Admin',
+      icon: ShieldCheck,
+      badge: 0,
+    }] : []),
     {
       id: 'estoque' as TabId,
       label: 'Estoque Suprimentos',
