@@ -98,30 +98,6 @@ export interface DailyNote {
   image?: string;
 }
 
-export interface FeedbackUpload {
-  id: string;
-  name: string;
-  type: 'image' | 'doc' | 'link';
-  url: string;
-}
-
-export interface DailyFeedback {
-  hasError: boolean;
-  errorQty: number;
-  errorDescription: string;
-  whatWentPerfect: string;
-  whatToImprove: string;
-  suggestions: string;
-  uploads: FeedbackUpload[];
-}
-
-export interface FeedbackLog {
-  date: string;
-  hasError: boolean;
-  errorQty: number;
-  rating: number; // calculated score
-}
-
 export interface UserConfig {
   name: string;
   photo: string;

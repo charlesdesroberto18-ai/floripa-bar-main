@@ -70,17 +70,16 @@ export default function App() {
 
   // Initialize and load from LocalStorage
   useEffect(() => {
-    const storedItems = localStorage.getItem('mare_items');
-    const storedMovements = localStorage.getItem('mare_movements');
-    const storedSync = localStorage.getItem('mare_last_sync');
-    const storedUser = localStorage.getItem('mare_active_user');
+    const storedItems = localStorage.getItem('floripa_items');
+    const storedMovements = localStorage.getItem('floripa_movements');
+    const storedSync = localStorage.getItem('floripa_last_sync');
+    const storedUser = localStorage.getItem('floripa_active_user');
 
     // Operational state restoration
-    const storedShift = localStorage.getItem('mare_work_shift');
-    const storedWage = localStorage.getItem('mare_weekly_wage');
-    const storedTasks = localStorage.getItem('mare_daily_tasks');
-    const storedNotes = localStorage.getItem('mare_daily_notes');
-    const storedFeedback = localStorage.getItem('mare_daily_feedback');
+    const storedShift = localStorage.getItem('floripa_work_shift');
+    const storedWage = localStorage.getItem('floripa_weekly_wage');
+    const storedTasks = localStorage.getItem('floripa_daily_tasks');
+    const storedNotes = localStorage.getItem('floripa_daily_notes');
 
     if (storedUser) {
       try {
@@ -99,9 +98,9 @@ export default function App() {
       const initialTimeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
       setLastSyncStr(initialTimeStr);
       
-      localStorage.setItem('mare_items', JSON.stringify(INITIAL_ITEMS));
-      localStorage.setItem('mare_movements', JSON.stringify(INITIAL_MOVEMENTS));
-      localStorage.setItem('mare_last_sync', initialTimeStr);
+      localStorage.setItem('floripa_items', JSON.stringify(INITIAL_ITEMS));
+      localStorage.setItem('floripa_movements', JSON.stringify(INITIAL_MOVEMENTS));
+      localStorage.setItem('floripa_last_sync', initialTimeStr);
     }
 
     if (storedShift) {
@@ -115,9 +114,6 @@ export default function App() {
     }
     if (storedNotes) {
       try { setDailyNotes(JSON.parse(storedNotes)); } catch (e) {}
-    }
-    if (storedFeedback) {
-      try { setDailyFeedback(JSON.parse(storedFeedback)); } catch (e) {}
     }
   }, []);
 
@@ -597,8 +593,6 @@ export default function App() {
                   onAddNote={handleAddNote}
                   onDeleteNote={handleDeleteNote}
                   onEditNote={handleEditNote}
-                  dailyFeedback={dailyFeedback}
-                  onSaveFeedback={handleSaveFeedback}
                   onNavigate={setActiveTab}
                   onQuickQuantityUpdate={handleQuickQuantityAdjustment}
                 />
@@ -649,7 +643,6 @@ export default function App() {
                   weeklyWage={weeklyWage}
                   dailyTasks={dailyTasks}
                   dailyNotes={dailyNotes}
-                  dailyFeedback={dailyFeedback}
                 />
               )}
 

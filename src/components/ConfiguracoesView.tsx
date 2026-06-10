@@ -94,7 +94,7 @@ export default function ConfiguracoesView({
       {saveSuccess && (
         <div className="bg-emerald-500/10 border border-emerald-500/20 text-[#10b981] p-3.5 rounded-xl font-bold flex items-center gap-2">
           <CheckCircle className="w-5 h-5" />
-          <span>✓ Configurações do A Maré atualizadas com sucesso no dispositivo!</span>
+          <span>✓ Configurações do Floripa Bar atualizadas com sucesso no dispositivo!</span>
         </div>
       )}
 

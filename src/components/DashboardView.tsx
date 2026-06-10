@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Play,
   Square,
@@ -9,27 +9,18 @@ import {
   Edit2,
   Check,
   CheckSquare,
-  AlertTriangle,
   Calendar,
   TrendingUp,
   AlertCircle,
-  Camera,
-  ScanLine,
   PlusCircle,
   Image,
-  Link,
+  Link2,
   FileText,
-  CheckCircle,
-  HelpCircle,
-  ChevronRight,
-  Sparkles,
-  Award,
-  ThumbsUp,
-  Sliders,
-  Bell,
-  Trash
+  Lightbulb,
+  X,
+  ExternalLink
 } from 'lucide-react';
-import { Item, Movement, Category, WorkShift, WeeklyWage, DailyTask, DailyNote, DailyFeedback, TaskPriority, TaskStatus, TabId } from '../types';
+import { Item, Movement, WorkShift, WeeklyWage, DailyTask, DailyNote, TaskPriority, TaskStatus, TabId } from '../types';
 import { UserSession } from './LoginScreen';
 
 interface DashboardViewProps {
@@ -49,12 +40,9 @@ interface DashboardViewProps {
   onDeleteTask: (id: string) => void;
   // Notes
   dailyNotes: DailyNote[];
-  onAddNote: (text: string) => void;
+  onAddNote: (text: string, link?: string, image?: string) => void;
   onDeleteNote: (id: string) => void;
-  onEditNote: (id: string, text: string) => void;
-  // Feedback
-  dailyFeedback: DailyFeedback;
-  onSaveFeedback: (feedback: DailyFeedback) => void;
+  onEditNote: (id: string, text: string, link?: string, image?: string) => void;
   // Navigation & Stock
   onNavigate: (tabId: TabId) => void;
   onQuickQuantityUpdate: (itemId: string, change: number, notes: string) => void;
@@ -80,8 +68,6 @@ export default function DashboardView({
   onAddNote,
   onDeleteNote,
   onEditNote,
-  dailyFeedback,
-  onSaveFeedback,
   onNavigate,
   onQuickQuantityUpdate,
   activeUser,
@@ -104,24 +90,16 @@ export default function DashboardView({
   const [taskDue, setTaskDue] = useState('18:00');
   const [taskNotes, setTaskNotes] = useState('');
 
-  // Notes Form State
+  // Notes / Ideias Form State
   const [noteText, setNoteText] = useState('');
   const [noteLink, setNoteLink] = useState('');
-  const [noteImage, setNoteImage] = useState('');
+  const [noteImage, setNoteImage] = useState(''); // base64
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [showLinkField, setShowLinkField] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Time calculation help for tasks
   const [currentTime, setCurrentTime] = useState(new Date());
-
-  // Feedback fields
-  const [fbHasError, setFbHasError] = useState(dailyFeedback.hasError);
-  const [fbErrorQty, setFbErrorQty] = useState(dailyFeedback.errorQty);
-  const [fbErrorDesc, setFbErrorDesc] = useState(dailyFeedback.errorDescription);
-  const [fbPerfect, setFbPerfect] = useState(dailyFeedback.whatWentPerfect);
-  const [fbToImprove, setFbToImprove] = useState(dailyFeedback.whatToImprove);
-  const [fbSuggestions, setFbSuggestions] = useState(dailyFeedback.suggestions);
-  const [fbUploads, setFbUploads] = useState(dailyFeedback.uploads);
-  const [copiedLink, setCopiedLink] = useState(false);
 
   // Format Elapsed clock
   const formatTime = (secs: number) => {
@@ -199,7 +177,6 @@ export default function DashboardView({
   const handleNoteSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!noteText.trim()) return;
-    
     if (editingNoteId) {
       onEditNote(editingNoteId, noteText, noteLink, noteImage);
       setEditingNoteId(null);
@@ -209,6 +186,7 @@ export default function DashboardView({
     setNoteText('');
     setNoteLink('');
     setNoteImage('');
+    setShowLinkField(false);
   };
 
   const handleEditNoteTrigger = (note: DailyNote) => {
@@ -216,67 +194,27 @@ export default function DashboardView({
     setNoteText(note.text);
     setNoteLink(note.link || '');
     setNoteImage(note.image || '');
+    if (note.link) setShowLinkField(true);
   };
 
-  // Save general end-day feedback
-  const handleSaveFeedbackData = () => {
-    onSaveFeedback({
-      hasError: fbHasError,
-      errorQty: fbErrorQty,
-      errorDescription: fbErrorDesc,
-      whatWentPerfect: fbPerfect,
-      whatToImprove: fbToImprove,
-      suggestions: fbSuggestions,
-      uploads: fbUploads,
-    });
-    const indicator = document.getElementById('feedback-saved-indicator');
-    if (indicator) {
-      indicator.classList.remove('opacity-0');
-      setTimeout(() => {
-        indicator.classList.add('opacity-0');
-      }, 3000);
-    }
+  // Handle real image upload (convert to base64)
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setNoteImage(ev.target?.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
-  // Simulate file upload or link adding
-  const handleAddUpload = (type: 'image' | 'doc' | 'link') => {
-    if (type === 'link') {
-      const url = prompt('Cole o link do documento ou referência externa:');
-      if (url) {
-        setFbUploads([
-          ...fbUploads,
-          { id: Math.random().toString(), name: 'Doc Link Externo', type, url },
-        ]);
-      }
-    } else {
-      // Simulate file picker / take picture
-      const filename = type === 'image' ? 'comprovante_erro.jpg' : 'assinatura_gerencia.pdf';
-      setFbUploads([
-        ...fbUploads,
-        { id: Math.random().toString(), name: filename, type, url: '#' },
-      ]);
-    }
+  const handleCancelEdit = () => {
+    setEditingNoteId(null);
+    setNoteText('');
+    setNoteLink('');
+    setNoteImage('');
+    setShowLinkField(false);
   };
-
-  // Remove upload item
-  const handleRemoveUpload = (id: string) => {
-    setFbUploads(fbUploads.filter((u) => u.id !== id));
-  };
-
-  const syncFeedbackState = () => {
-    setFbHasError(dailyFeedback.hasError);
-    setFbErrorQty(dailyFeedback.errorQty);
-    setFbErrorDesc(dailyFeedback.errorDescription);
-    setFbPerfect(dailyFeedback.whatWentPerfect);
-    setFbToImprove(dailyFeedback.whatToImprove);
-    setFbSuggestions(dailyFeedback.suggestions);
-    setFbUploads(dailyFeedback.uploads);
-  };
-
-  // Keep feedback fields in sync with props changes
-  useEffect(() => {
-    syncFeedbackState();
-  }, [dailyFeedback]);
 
   // Quick Stock alerts calculations
   const outOfStockItems = items.filter((item) => item.quantity === 0);
@@ -1001,11 +939,11 @@ export default function DashboardView({
           </button>
 
           <button
-            onClick={() => { const el = document.getElementById('nav-item-dashboard'); el?.scrollIntoView({ behavior: 'smooth' }); }}
+            onClick={() => { const el = document.querySelector('textarea'); el?.scrollIntoView({ behavior: 'smooth' }); el?.focus(); }}
             className="p-3 rounded-xl bg-slate-950 border border-slate-850 text-slate-300 hover:border-brand-orange hover:text-white transition-all text-xs font-semibold text-center cursor-pointer flex flex-col items-center justify-center gap-2"
           >
-            <Plus className="w-5 h-5 text-brand-orange" />
-            <span>Nova Anotação</span>
+            <Lightbulb className="w-5 h-5 text-brand-orange" />
+            <span>Nova Ideia</span>
           </button>
 
           <button
@@ -1014,14 +952,6 @@ export default function DashboardView({
           >
             <DollarSign className="w-5 h-5 text-brand-orange" />
             <span>Registrar Vale</span>
-          </button>
-
-          <button
-            onClick={() => { setFbHasError(true); setFbErrorQty(prev => prev + 1); const el = document.getElementById('nav-item-dashboard'); el?.scrollIntoView({ behavior: 'smooth' }); }}
-            className="p-3 rounded-xl bg-slate-950 border border-slate-850 text-slate-300 hover:border-brand-orange hover:text-white transition-all text-xs font-semibold text-center cursor-pointer flex flex-col items-center justify-center gap-2"
-          >
-            <AlertCircle className="w-5 h-5 text-brand-orange" />
-            <span>Registrar Erro Pedido</span>
           </button>
 
           <button

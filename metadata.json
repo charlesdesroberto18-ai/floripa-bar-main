@@ -1,6 +1,6 @@
 {
-  "name": "A Maré",
-  "description": "Sistema moderno para controle de estoque do restaurante A Maré",
+  "name": "Floripa Bar",
+  "description": "Sistema moderno para controle de estoque do restaurante Floripa Bar",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -31,7 +31,6 @@ interface WeeklyReportViewProps {
   weeklyWage: WeeklyWage;
   dailyTasks: DailyTask[];
   dailyNotes: DailyNote[];
-  dailyFeedback: DailyFeedback;
 }
 
 type ReportSubTab = 'whatsapp' | 'baixo' | 'falta' | 'validade' | 'movimentacoes' | 'perdas' | 'feedbacks';
@@ -43,7 +42,6 @@ export default function WeeklyReportView({
   weeklyWage,
   dailyTasks,
   dailyNotes,
-  dailyFeedback,
 }: WeeklyReportViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<ReportSubTab>('whatsapp');
   const [copied, setCopied] = useState(false);
@@ -124,80 +122,51 @@ export default function WeeklyReportView({
 
   // Compile Comprehensive WhatsApp Message Content
   const generateWhatsAppMessage = () => {
-    let msg = `🌊 *RELATÓRIO OPERACIONAL - A MARÉ* 🌊\n`;
-    msg += `📅 _Relatório consolidado para Gerência e Finanças_\n`;
-    msg += `══════════════════════════════\n\n`;
+    const totalDays = weeklyWage.selectedDays.length;
+    const gross = totalDays * weeklyWage.dailyRate;
+    const vales = weeklyWage.transactions.filter(t => t.type === 'vale').reduce((s, t) => s + t.amount, 0);
+    const liquid = gross - vales;
 
-    msg += `👤 *1. JORNADA E FINANCEIRO DO GARÇOM*\n`;
-    msg += `• Operador: ${workShift.status === 'nao_iniciada' ? 'Sem operador ativo' : 'Aberto por operador local'}\n`;
-    msg += `• Jornada de hoje: ${formatSecsToHm(workShift.elapsedSeconds)} trabalhado\n`;
-    msg += `• Escala Semanal: ${totalDaysWorked} dias trabalhados nesta escala\n`;
-    msg += `• Salário Diárias Bruto: R$ ${grossWages.toFixed(2)} (Ref: R$ ${weeklyWage.dailyRate.toFixed(2)}/diária)\n`;
-    msg += `• Vales/Adiantamentos: R$ ${valesTotal.toFixed(2)}\n`;
-    msg += `• Descontos regist.: R$ ${discountsTotal.toFixed(2)}\n`;
-    msg += `• *SALDO LÍQUIDO A RECEBER: R$ ${netEarnings.toFixed(2)}*\n\n`;
+    let msg = `*RELATÓRIO OPERACIONAL - FLORIPA BAR*\n`;
+    msg += `_Semana de Referência: ${new Date().toLocaleDateString('pt-BR')}_\n\n`;
 
-    msg += `❌ *2. SUPRIMENTOS EM FALTA (URGENTE)*\n`;
-    if (outOfStock.length === 0) {
-      msg += `✓ Nenhum item zerado! Abastecimento OK.\n`;
-    } else {
-      outOfStock.forEach((item) => {
-        msg += `• ${item.name} | Forn: ${item.supplier}\n`;
-      });
-    }
+    msg += `*1. FINANCEIRO SEMANAL*\n`;
+    msg += `• Diárias: ${totalDays} dias (R$ ${weeklyWage.dailyRate.toFixed(2)}/dia)\n`;
+    msg += `• Bruto: R$ ${gross.toFixed(2)}\n`;
+    msg += `• Vales/Adiantos: R$ ${vales.toFixed(2)}
+`;
+    msg += `• *SALDO LÍQUIDO: R$ ${liquid.toFixed(2)}*\n\n`;
+
+    msg += `*2. TAREFAS DO DIA*\n`;
+    dailyTasks.forEach(t => {
+      msg += `${t.status === 'Concluída' ? '✅' : '❌'} ${t.title} (${t.status})\n`;
+    });
     msg += `\n`;
 
-    msg += `⚠️ *3. ALERTAS DE ESTOQUE BAIXO*\n`;
-    if (lowStock.length === 0) {
-      msg += `✓ Nenhum item abaixo do nível de segurança.\n`;
-    } else {
-      lowStock.forEach((item) => {
-        msg += `• ${item.name} (${item.quantity} restando | Mín ideal: ${item.minQuantity} ${item.unit})\n`;
-      });
-    }
-    msg += `\n`;
-
-    msg += `📋 *4. CONTROLE DE TAREFAS OPERACIONAIS*\n`;
-    const doneTasks = dailyTasks.filter(t => t.status === 'Concluída');
-    msg += `• Progresso geral: ${doneTasks.length} de ${dailyTasks.length} tarefas concluídas\n`;
-    if (dailyTasks.length > 0) {
-      dailyTasks.forEach((t) => {
-        const checkChar = t.status === 'Concluída' ? '✓' : '✗';
-        msg += ` [${checkChar}] ${t.title} (${t.dueTime})\n`;
-      });
-    } else {
-      msg += `• Nenhuma tarefa cadastrada para o turno de hoje.\n`;
-    }
-    msg += `\n`;
-
-    msg += `📢 *5. ANOTAÇÕES OPERACIONAIS DO SALÃO*\n`;
     if (dailyNotes.length > 0) {
+      msg += `*3. ANOTAÇÕES E IDEIAS*\n`;
       dailyNotes.forEach((n) => {
-        msg += `• "${n.text}" (${n.time})\n`;
+        msg += `• ${n.text}\n`;
+        if (n.link) msg += `  🔗 Link: ${n.link}\n`;
+        if (n.image) {
+          if (n.image.startsWith('http')) {
+            msg += `  🖼️ Imagem: ${n.image}\n`;
+          } else {
+            msg += `  🖼️ [Imagem Anexada]\n`;
+          }
+        }
       });
+      msg += `\n`;
+    }
+
+    msg += `*4. ALERTAS DE ESTOQUE*\n`;
+    const missing = items.filter(i => i.quantity === 0);
+    if (missing.length > 0) {
+      msg += `🚨 *FALTANDO:* ${missing.map(i => i.name).join(', ')}\n`;
     } else {
-      msg += `• Sem anotações ou ocorrências registradas hoje.\n`;
+      msg += `✅ Estoque OK (sem faltas críticas)\n`;
     }
-    msg += `\n`;
 
-    msg += `🌟 *6. FEEDBACK DO DIA E ERROS OPERACIONAIS*\n`;
-    msg += `• Erros de pedidos registrados: ${dailyFeedback.hasError ? `${dailyFeedback.errorQty} erros` : 'Nenhum erro registrado!'}\n`;
-    if (dailyFeedback.hasError && dailyFeedback.errorDescription) {
-      msg += `  Detalhamento: ${dailyFeedback.errorDescription}\n`;
-    }
-    if (dailyFeedback.whatWentPerfect) {
-      msg += `• Acertos: ${dailyFeedback.whatWentPerfect}\n`;
-    }
-    if (dailyFeedback.whatToImprove) {
-      msg += `• Melhorias p/ amanhã: ${dailyFeedback.whatToImprove}\n`;
-    }
-    if (dailyFeedback.suggestions) {
-      msg += `• Sugestões à gestão: ${dailyFeedback.suggestions}\n`;
-    }
-    msg += `\n`;
-
-    msg += `══════════════════════════════\n`;
-    msg += `_Compilado via A Maré POS Smart Console_ 🌊🤙`;
     return msg;
   };
 
@@ -210,8 +179,9 @@ export default function WeeklyReportView({
   };
 
   const handleSendWhatsApp = () => {
+    const phone = '5541987751358';
     const encoded = encodeURIComponent(messageText);
-    const url = `https://api.whatsapp.com/send?text=${encoded}`;
+    const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encoded}`;
     window.open(url, '_blank');
   };
 
@@ -336,7 +306,7 @@ export default function WeeklyReportView({
             <div className="flex items-center gap-3 bg-brand-orange/5 border border-brand-orange/10 rounded-xl p-3.5">
               <HelpCircle className="w-5 h-5 text-brand-orange shrink-0" />
               <p className="text-[11px] text-slate-400">
-                Pressione <strong className="text-slate-300">"Copiar WhatsApp"</strong> no topo para copiar o texto com formatação do WhatsApp para sua área de transferência, para ser enviado em grupos de compras e gerenciamento da equipe do A Maré.
+                Pressione <strong className="text-slate-300">"Copiar WhatsApp"</strong> no topo para copiar o texto com formatação do WhatsApp para sua área de transferência, para ser enviado em grupos de compras e gerenciamento da equipe do Floripa Bar.
               </p>
             </div>
           </div>
